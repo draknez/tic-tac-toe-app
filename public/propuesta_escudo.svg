@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <path d="M25,20 L75,20 L75,55 C75,70 50,85 50,85 C50,85 25,70 25,55 L25,20 Z" fill="#4a5568" />
+  <rect x="32" y="28" width="16" height="16" rx="2" fill="#38a169" />
+  <rect x="52" y="28" width="16" height="16" rx="2" fill="#e2e8f0" />
+  <rect x="32" y="48" width="36" height="12" rx="2" fill="#38a169" />
+  <text x="50" y="15" font-family="Arial, sans-serif" font-weight="bold" font-size="7" text-anchor="middle" fill="#4a5568">BALOG</text>
+</svg>
