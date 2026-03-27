@@ -15,6 +15,7 @@ import PrivateLayout from './layouts/PrivateLayout';
 // Pages
 import HomePage from './pages/public/HomePage';
 import LogoShowcase from './pages/public/LogoShowcase';
+import SandboxPage from './pages/public/SandboxPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import ProfilePage from './pages/private/ProfilePage';
@@ -34,6 +35,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <Route path="/" element={<BaseLayout />}>
                 <Route index element={<HomePage />} />
                 <Route path="logos" element={<LogoShowcase />} />
+                <Route path="sandbox" element={<SandboxPage />} />
                 <Route path="login" element={<LoginPage />} />
                 <Route path="register" element={<RegisterPage />} />
               </Route>
