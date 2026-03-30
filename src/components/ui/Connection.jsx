@@ -20,7 +20,7 @@ export const Connection = ({ start, end, type = 'bezier', isSelected, className 
   }
 
   return (
-    <g className={cn("transition-all duration-500", isSelected ? "opacity-100" : "opacity-60", className)}>
+    <g className={cn("transition-all duration-500", isSelected ? "opacity-100" : "opacity-80", className)}>
       {/* Glow effect sutil */}
       <path d={pathData} fill="none" stroke="currentColor" strokeWidth="6" className="text-teal-500/5 blur-sm" />
       
@@ -34,14 +34,14 @@ export const Connection = ({ start, end, type = 'bezier', isSelected, className 
         className={cn(
           "transition-all duration-300", 
           isSelected 
-            ? "text-teal-500 stroke-[2]" 
-            : "text-gray-300 dark:text-gray-700" // Gris más visible en ambos modos
+            ? "text-teal-500/70 stroke-[2.5]" 
+            : "text-gray-300 dark:text-zinc-800" // Gris más contrastado
         )}
       />
       
       <circle 
         cx={x2} cy={y2} r="3" 
-        className={cn("transition-all", isSelected ? "fill-teal-500" : "fill-gray-300 dark:fill-gray-800")} 
+        className={cn("transition-all", isSelected ? "fill-teal-500" : "fill-gray-300 dark:fill-zinc-800")} 
       />
     </g>
   );
