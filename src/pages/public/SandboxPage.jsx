@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import { StatusBadge } from '../../components/ui/StatusBadge';
@@ -9,18 +9,31 @@ import { cn } from "../../utils/cn";
 const STORAGE_KEY = 'sandbox-org-tree-v3';
 const LINE_TYPE_KEY = 'sandbox-line-type';
 
+const MOCK_DATA = [
+  { id: 'root', parentId: null, label: 'Lic. Roberto Gómez', role: 'Director General', type: 'Dirección', pos: { x: 500, y: 50 } },
+  { id: 'd1', parentId: 'root', label: 'Ing. Alicia Rivas', role: 'Gerente Operaciones', type: 'Departamento', pos: { x: 300, y: 200 } },
+  { id: 'd2', parentId: 'root', label: 'CPA. Marcos Sosa', role: 'Gerente Finanzas', type: 'Departamento', pos: { x: 700, y: 200 } },
+  { id: 's1', parentId: 'd1', label: 'Lic. Sandra Luz', role: 'Jefe Logística', type: 'Sección', pos: { x: 200, y: 350 } },
+  { id: 's2', parentId: 'd1', label: 'Téc. Raúl Peña', role: 'Jefe Almacén', type: 'Sección', pos: { x: 400, y: 350 } },
+  { id: 'u1', parentId: 's1', label: 'Pedro Armas', role: 'Supervisor A', type: 'Unidad', pos: { x: 200, y: 500 } }
+];
+
 const SandboxPage = () => {
   const [activeTab, setActiveTab] = useState('structure');
-  const [lineType, setLineType] = useState(() => {
-    return localStorage.getItem(LINE_TYPE_KEY) || 'bezier';
-  });
+  const [lineType, setLineType] = useState(() => localStorage.getItem(LINE_TYPE_KEY) || 'bezier');
+  const fileInputRef = useRef(null);
   
   const [nodes, setNodes] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [{ id: 'root-1', parentId: null, label: 'Fundador', pos: { x: 400, y: 100 } }];
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [{ id: 'root-1', parentId: null, label: 'Fundador', role: 'Director', type: 'Dirección', pos: { x: 400, y: 100 } }];
+    } catch (e) {
+      return [{ id: 'root-1', parentId: null, label: 'Fundador', role: 'Director', type: 'Dirección', pos: { x: 400, y: 100 } }];
+    }
   });
 
   const handleSave = (newNodes) => {
+    if (!newNodes || !Array.isArray(newNodes)) return;
     setNodes(newNodes);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newNodes));
   };
@@ -28,6 +41,38 @@ const SandboxPage = () => {
   const handleLineTypeChange = (type) => {
     setLineType(type);
     localStorage.setItem(LINE_TYPE_KEY, type);
+  };
+
+  const addIndependentNode = () => {
+    const id = `node-${Math.random().toString(36).substr(2, 9)}`;
+    const newNode = { id, parentId: null, label: 'Nuevo Nodo', role: 'Cargo', type: 'Unidad', pos: { x: 100, y: 100 } };
+    handleSave([...nodes, newNode]);
+  };
+
+  const resetCanvas = () => {
+    if (window.confirm("¿Estás seguro de resetear todo el organigrama?")) {
+      const initial = [{ id: 'root-1', parentId: null, label: 'Fundador', role: 'Director', type: 'Dirección', pos: { x: 400, y: 100 } }];
+      handleSave(initial);
+    }
+  };
+
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const json = JSON.parse(e.target.result);
+          if (Array.isArray(json)) {
+            handleSave(json);
+          }
+        } catch (err) {
+          console.error("Error al cargar JSON");
+        }
+      };
+      reader.readAsText(file);
+    }
+    if (event.target) event.target.value = '';
   };
 
   return (
@@ -44,11 +89,19 @@ const SandboxPage = () => {
 
         {activeTab === 'structure' && (
           <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 mr-2">
+              <Button variant="outline" className="h-6 px-2 text-[7px] font-black border-rose-500/20 text-rose-500 hover:bg-rose-50" onClick={resetCanvas}>Reset</Button>
+              <Button variant="outline" className="h-6 px-2 text-[7px] font-black" onClick={() => handleSave(MOCK_DATA)}>Seed Data</Button>
+              <Button variant="outline" className="h-6 px-2 text-[7px] font-black" onClick={() => fileInputRef.current?.click()}>Import JSON</Button>
+              <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".json" className="hidden" />
+            </div>
+
             <div className="flex bg-gray-50 dark:bg-gray-900 p-0.5 rounded-md">
               <button onClick={() => handleLineTypeChange('bezier')} className={cn("px-2 py-0.5 text-[7px] font-bold rounded-sm", lineType === 'bezier' ? "bg-white dark:bg-black text-teal-600" : "text-gray-400")}>Curve</button>
               <button onClick={() => handleLineTypeChange('orthogonal')} className={cn("px-2 py-0.5 text-[7px] font-bold rounded-sm", lineType === 'orthogonal' ? "bg-white dark:bg-black text-teal-600" : "text-gray-400")}>Grid</button>
             </div>
-            <StatusBadge status="online">Editor Active</StatusBadge>
+            
+            <Button variant="primary" className="h-6 px-3 text-[7px] font-bold rounded-full" onClick={addIndependentNode}>+ Raíz</Button>
           </div>
         )}
 
@@ -58,28 +111,12 @@ const SandboxPage = () => {
       </nav>
 
       <main className="flex-1 relative overflow-hidden">
-        {/* MODO EDICIÓN */}
         {activeTab === 'structure' && (
-          <OrgChart 
-            initialData={nodes} 
-            readOnly={false} 
-            lineType={lineType}
-            onSave={handleSave} 
-          />
+          <OrgChart initialData={nodes} readOnly={false} lineType={lineType} onSave={handleSave} />
         )}
 
-        {/* MODO PREVISUALIZACIÓN (FRONTEND) */}
         {activeTab === 'preview' && (
-          <div className="w-full h-full relative">
-            <div className="absolute top-4 left-4 z-50 bg-white/80 dark:bg-black/80 backdrop-blur px-3 py-1 rounded-full border border-gray-100 dark:border-white/5 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-              Live Preview (No Editable)
-            </div>
-            <OrgChart 
-              initialData={nodes} 
-              readOnly={true} 
-              lineType={lineType}
-            />
-          </div>
+          <OrgChart initialData={nodes} readOnly={true} lineType={lineType} />
         )}
 
         {activeTab === 'forms' && (
@@ -100,12 +137,6 @@ const SandboxPage = () => {
                   <StatusBadge status="online">Sincronizado</StatusBadge>
                   <StatusBadge status="busy">Ocupado</StatusBadge>
                   <StatusBadge status="offline">Desconectado</StatusBadge>
-                </div>
-              </Card>
-              <Card title="Interactive Buttons" subtitle="Visual styles">
-                <div className="flex gap-2 p-4 bg-white dark:bg-zinc-900 rounded-xl border border-gray-100 dark:border-white/5">
-                  <Button variant="primary" size="sm">Primary Action</Button>
-                  <Button variant="outline" size="sm">Secondary</Button>
                 </div>
               </Card>
             </div>

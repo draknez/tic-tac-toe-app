@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { MasterBox } from './MasterBox';
 import { Connection } from './Connection';
 import { cn } from "../../utils/cn";
@@ -11,26 +11,43 @@ export const OrgChart = ({
   enablePhysicsDefault = false,
   className 
 }) => {
-  const [nodes, setNodes] = useState(initialData);
+  // Estado interno para manejo fluido
+  const [nodes, setNodes] = useState(initialData || []);
   const [positions, setPositions] = useState({});
   const [selectedId, setSelectedId] = useState(null);
   const [enablePhysics, setEnablePhysics] = useState(enablePhysicsDefault);
+  
+  // Ref para evitar bucles de actualización con el padre
+  const isInternalUpdate = useRef(false);
 
-  // Sincronizar posiciones iniciales
+  // 1. Sincronización inicial o cambio externo (Importar JSON)
   useEffect(() => {
-    const posMap = {};
-    nodes.forEach(n => { posMap[n.id] = n.pos || { x: 0, y: 0 }; });
-    setPositions(posMap);
+    if (isInternalUpdate.current) {
+      isInternalUpdate.current = false;
+      return;
+    }
+    
+    if (initialData && Array.isArray(initialData)) {
+      setNodes(initialData);
+      const posMap = {};
+      initialData.forEach(n => { 
+        if (n && n.id) posMap[n.id] = n.pos || { x: 0, y: 0 }; 
+      });
+      setPositions(posMap);
+    }
   }, [initialData]);
 
-  // Notificar cambios al padre si existe onSave
+  // 2. Notificar al padre solo cuando los NODOS cambian (no en cada movimiento de posiciones)
   useEffect(() => {
-    if (onSave) onSave(nodes);
-  }, [nodes, onSave]);
+    if (onSave && nodes.length > 0) {
+      isInternalUpdate.current = true;
+      onSave(nodes);
+    }
+  }, [nodes]);
 
   const handleAddChild = (parentId) => {
     if (readOnly) return;
-    const parentPos = positions[parentId] || { x: 0, y: 0 };
+    const parentPos = positions[parentId] || { x: 400, y: 100 };
     const newId = `node-${Math.random().toString(36).substr(2, 9)}`;
     const spacing = 160;
     const targetY = parentPos.y + 160;
@@ -53,13 +70,17 @@ export const OrgChart = ({
         id: newId, 
         parentId, 
         label: 'Nueva Unidad', 
+        role: 'Cargo',
+        type: 'Unidad',
         pos: { x: startX + (totalChildren - 1) * spacing, y: targetY } 
       };
 
       const finalNodes = [...updatedNodes, newNode];
-      const newPositions = { ...positions };
-      finalNodes.forEach(n => { newPositions[n.id] = n.pos; });
-      setPositions(newPositions);
+      // Actualizar posiciones inmediatamente para las líneas
+      const newPosMap = {};
+      finalNodes.forEach(n => { newPosMap[n.id] = n.pos; });
+      setPositions(newPosMap);
+      
       return finalNodes;
     });
     setSelectedId(parentId);
@@ -68,7 +89,8 @@ export const OrgChart = ({
   const handleRemoveNode = (id) => {
     if (readOnly) return;
     const nodeToRemove = nodes.find(n => n.id === id);
-    const parentId = nodeToRemove?.parentId;
+    if (!nodeToRemove) return;
+    const parentId = nodeToRemove.parentId;
     const nodesToRemove = new Set([id]);
     
     const findChildren = (pid) => {
@@ -90,7 +112,7 @@ export const OrgChart = ({
 
           const reCenteredNodes = filteredNodes.map(node => {
             if (node.parentId === parentId) {
-              const index = siblings.findIndex(s => s.id === node.id);
+              const index = remainingSiblings.findIndex(s => s.id === node.id);
               const newX = startX + index * spacing;
               return { ...node, pos: { ...node.pos, x: newX } };
             }
@@ -120,14 +142,13 @@ export const OrgChart = ({
       Object.keys(newPositions).forEach(otherId => {
         if (otherId === id) return;
         const otherPos = newPositions[otherId];
+        if (!otherPos) return;
+
         const dx = pos.x - otherPos.x;
         const dy = pos.y - otherPos.y;
-        const absDx = Math.abs(dx);
-        const absDy = Math.abs(dy);
-
-        if (absDx < MIN_DIST_X && absDy < MIN_DIST_Y) {
-          const overlapX = MIN_DIST_X - absDx;
-          const overlapY = MIN_DIST_Y - absDy;
+        if (Math.abs(dx) < MIN_DIST_X && Math.abs(dy) < MIN_DIST_Y) {
+          const overlapX = MIN_DIST_X - Math.abs(dx);
+          const overlapY = MIN_DIST_Y - Math.abs(dy);
           const pushX = overlapX * (dx > 0 ? -0.4 : 0.4);
           const pushY = overlapY * (dy > 0 ? -0.4 : 0.4);
           newPositions[otherId] = { x: otherPos.x + pushX, y: otherPos.y + pushY };
@@ -135,15 +156,26 @@ export const OrgChart = ({
       });
       return newPositions;
     });
+  }, [enablePhysics, readOnly]);
 
+  // Actualizar el estado de NODOS (persistente) solo cuando el usuario termina de mover o cada 500ms
+  useEffect(() => {
     const timer = setTimeout(() => {
-      setNodes(current => current.map(n => ({
-        ...n,
-        pos: positions[n.id] || n.pos
-      })));
-    }, 50);
+      setNodes(current => {
+        let changed = false;
+        const updated = current.map(n => {
+          const p = positions[n.id];
+          if (p && (p.x !== n.pos.x || p.y !== n.pos.y)) {
+            changed = true;
+            return { ...n, pos: p };
+          }
+          return n;
+        });
+        return changed ? updated : current;
+      });
+    }, 500);
     return () => clearTimeout(timer);
-  }, [positions, enablePhysics, readOnly]);
+  }, [positions]);
 
   const handleRename = (id, newLabel) => {
     if (readOnly) return;
@@ -165,29 +197,35 @@ export const OrgChart = ({
             </defs>
             <rect width="100%" height="100%" fill="url(#grid-dots-reusable)" />
             {nodes.map(node => (
-              <Connection 
-                key={`line-${node.id}`} 
-                start={positions[node.parentId]} 
-                end={positions[node.id]} 
-                type={lineType}
-                isSelected={selectedId === node.id || selectedId === node.parentId} 
-              />
+              node && node.id && (
+                <Connection 
+                  key={`line-${node.id}`} 
+                  start={positions[node.parentId]} 
+                  end={positions[node.id]} 
+                  type={lineType}
+                  isSelected={selectedId === node.id || selectedId === node.parentId} 
+                />
+              )
             ))}
           </svg>
           {nodes.map(node => (
-            <MasterBox 
-              key={node.id} 
-              id={node.id} 
-              label={node.label} 
-              initialPosition={node.pos} 
-              isSelected={selectedId === node.id} 
-              readOnly={readOnly}
-              onSelect={setSelectedId} 
-              onAddChild={handleAddChild} 
-              onRemove={handleRemoveNode} 
-              onRename={handleRename} 
-              onMove={handleUpdatePositionCapture} 
-            />
+            node && node.id && (
+              <MasterBox 
+                key={node.id} 
+                id={node.id} 
+                label={node.label || "Nombre"} 
+                role={node.role || "Cargo"}
+                type={node.type || "Unidad"}
+                initialPosition={node.pos || { x: 0, y: 0 }} 
+                isSelected={selectedId === node.id} 
+                readOnly={readOnly}
+                onSelect={setSelectedId} 
+                onAddChild={handleAddChild} 
+                onRemove={handleRemoveNode} 
+                onRename={handleRename} 
+                onMove={handleUpdatePositionCapture} 
+              />
+            )
           ))}
         </div>
       </div>
